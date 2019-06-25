@@ -1,3 +1,6 @@
+# Combines data extracted from finding nearest name via Levenshtein distance
+# and other relevant information from the AN database
+
 from bs4 import BeautifulSoup
 import unicodedata
 import os
@@ -20,7 +23,6 @@ from itertools import islice, izip
 from Levenshtein import distance
 
 def read_names_file(name_file):
-	# pd_list = pd.read_excel("an_names.xls")
 	pd_list = pd.read_excel(name_file)
 	pd_list = pd_list.set_index('Full Name')
 	speakers = pd_list.index.tolist()
@@ -29,7 +31,6 @@ def read_names_file(name_file):
 		speakers[ind] = remove_diacritic(speaker).decode('utf-8').lower()
 	pd_list.index = speakers
 	return pd_list
-
 
 def read_speaker_dist(name_file):
 	pd_list = pd.read_excel(name_file)

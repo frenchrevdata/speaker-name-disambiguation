@@ -2,8 +2,7 @@
 # -*- coding=utf-8 -*-
 
 """
-Does the majority of the data parsing of the XML files and outputs two critical files -- raw_speeches and speechid_to_speaker.
-It also keeps track of errors in the XML files.
+Iterates through all speeches but only looks at the speaker name in order to do speaker disambiguation
 """
 
 from bs4 import BeautifulSoup
@@ -123,11 +122,6 @@ def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 		# Removes the footnotes
 		while talk.find("note"):
 			ftnotes = talk.note.extract()
-			# ftnotes = remove_diacritic(ftnotes.get_text()).decode('utf-8')
-			# ftnotes = ftnotes.replace("\n","").replace("\r","").replace("\t","").replace("  "," ")
-			# speech_id = "" + id_base + "_" + str(number_of_speeches + 1)
-			# footnotes.append([ftnotes, speaker, speech_id, volno])
-
 
 		# Piece together full speech if in multiple paragraph tags
 		speech = talk.find_all('p')
@@ -173,73 +167,6 @@ def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 					speaker_dists_split.append([speaker, full_speaker[0], full_speaker[1], volno, date, speaker_note])
 		speakers_seen.add(speaker)
 
-			# if speaker not in speaker_dists:
-			# 	speaker_dists[speaker] = compute_speaker_Levenshtein_distance(speaker)	
-
-			# speakers_not_matched = []
-
-			# if speaker not in speaker_dists:
-			# 	speaker_distances = compute_speaker_Levenshtein_distance(speaker)
-			# 	# Need to look at only the top two and if less than or equal to 1 distance keep it, otherwise say not found
-			# 	if speaker_distances[0][1] <= 1:
-			# 		speaker = speaker_distances[0][0]
-			# 	else:
-			# 		speaker_dists[speaker] = speaker_distances	
-
-
-		# Speaker name is set to the full speaker name extracted from the Excel file
-		speaker_name = ""
-
-
-		# Only look at speeches not form the president
-		if speaker not in presidents:
-			if speaker in speaker_list.index.values:
-				for j, name in enumerate(speaker_list.index.values):
-					if speaker == name:
-						speaker_name = speaker_list["FullName"].iloc[j]
-			else:
-				for i, name in enumerate(speaker_list['LastName']):
-					# Ensures not looking at a list of speakers
-					if (speaker.find(",") != -1) and (speaker.find(" et ") != -1):
-						#only store multiple speakers when length of speech greater than 100
-						speaker_name = "multi"
-						if len(full_speech) >= 100:
-							multiple_speakers[speaker] = [full_speech, str(volno), str(date)]
-					else:
-						# Looks if speaker name embedded in any names in the Excel file
-						if speaker.find(name) != -1 :
-							speaker_name = speaker_list["FullName"].iloc[i]
-							# Adds the speakers_using_find list to do a manual check to ensure that no names are mischaracterized
-							speakers_using_find.add(speaker + " : " + remove_diacritic(speaker_name).decode('utf-8') + "; " + str(volno) + "; " + str(date) + "\n")
-		else:
-			speaker_name = "president"
-		# Creates the unique speech id
-		if (speaker_name is not "") and (speaker_name is not "multi") and (speaker_name is not "president"):
-			speaker_name = remove_diacritic(speaker_name).decode('utf-8')
-			number_of_speeches = number_of_speeches + 1
-			if(speaker_name in speaker_num_total_speeches):
-				speaker_num_total_speeches[speaker_name] = speaker_num_total_speeches[speaker_name] + 1
-			else:
-				speaker_num_total_speeches[speaker_name] = 1
-			if(speaker_name in speaker_num_total_chars):
-				speaker_num_total_chars[speaker_name] = speaker_num_total_chars[speaker_name] + len(full_speech)
-			else:
-				speaker_num_total_chars[speaker_name] = len(full_speech)
-			if id_base in speakers_per_session:
-				speakers_per_session[id_base].add(speaker_name)
-			else:
-				speakers_per_session[id_base] = set()
-				speakers_per_session[id_base].add(speaker_name)
-			speakers.add(speaker_name)
-			speech_id = "" + id_base + "_" + str(number_of_speeches)
-			speechid_to_speaker[speech_id] = speaker_name
-			raw_speeches[speech_id] = full_speech
-		else:
-			if (speaker_name is not "multi") and (speaker_name is not "president"):
-				names_not_caught.add(speaker + "; " + str(volno) + "; " + str(date) + "\n")
-
-	speeches_per_day[id_base] = number_of_speeches
-
 
 # Parses dates from file being analyzed
 def extractDate(soup_file):
@@ -271,12 +198,6 @@ if __name__ == '__main__':
 
 	write_to = pd.ExcelWriter("speaker_distances_split.xlsx")
 	speaker_distances_split.to_excel(write_to, 'Sheet1')
-	write_to.save()
-
-	footnotes = pd.DataFrame(footnotes, columns = ["Footnote", "Speaker", "Speechid", "Volno"])
-
-	write_to = pd.ExcelWriter("footnotes.xlsx")
-	footnotes.to_excel(write_to, 'Sheet1')
 	write_to.save()
 
 	# w = csv.writer(open("speaker_dists.csv", "w"))

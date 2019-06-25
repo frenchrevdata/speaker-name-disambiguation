@@ -20,7 +20,6 @@ from itertools import islice, izip
 from Levenshtein import distance
 
 def read_names(name_file):
-	# pd_list = pd.read_excel("an_names.xls")
 	pd_list = pd.read_excel(name_file)
 	pd_list = pd_list.set_index('Last Name')
 	speakers = pd_list.index.tolist()
@@ -34,7 +33,7 @@ def read_names(name_file):
 	pd_list["Full Name"] = full_names
 	speakers_to_remove = []
 	speakers_to_keep = []
-	# Need to look if dates are within the span
+	# Need to look if dates are within the timeframe of the Girondins/Montgnards
 	for j, speaker in enumerate(pd_list.index.values):
 		valid_date = False
 		depute_de = pd_list["Depute de"].iloc[j]
@@ -76,19 +75,15 @@ def read_names(name_file):
 			speakers_to_remove.append(j)
 		if valid_date == True:
 			speakers_to_keep.append(j)
-			# if speaker in pd_list.index.values:
-				# speakers_to_remove.append(speaker)
-				# speakers_to_remove.append(j)
-				# pd_list = pd_list.drop(speaker, axis=0)
-	# pd_list = pd_list.drop(speakers_to_remove, axis=0)
+
 
 	pd_list = pd_list.iloc[speakers_to_keep]
-	# pd_list = pd_list.drop(pd_list.index[speakers_to_remove])
 	pickle_filename = "dated_names.pickle"
 	with open(pickle_filename, 'wb') as handle:
 		pickle.dump(pd_list, handle, protocol = 0)
 	return pd_list
 
+# Splits the speaker names
 def speaker_name_split(full_speaker_names):
 	speakers_split = []
 	for speaker_name in full_speaker_names.index:
@@ -98,11 +93,12 @@ def speaker_name_split(full_speaker_names):
 	return speakers_split
 
 
-# Need to remove diacritic
-
+# Finds the distance of the speaker name extracted from the XML to the last name
+# in the AN data and the full name in the AN data
 def compute_speaker_Levenshtein_distance(speaker_name, full_speaker_names):
-	# speaker_last_names = read_names("an_last_names.xls")
 	distance_size = {}
+
+	# Finds distance to full name
 	for i, speaker in enumerate(full_speaker_names['Full Name']):
 		# Levenshtein distance
 		if isinstance(speaker_name, str):
@@ -112,11 +108,9 @@ def compute_speaker_Levenshtein_distance(speaker_name, full_speaker_names):
 		dist = distance(speaker, speaker_name)
 		distance_size[speaker] = dist
 
-	
-
+	# Finds distance to last name
 	for j, speaker in enumerate(full_speaker_names.index.values):
 		# Levenshtein distance
-		# speaker = unicodedata.normalize("NFKD", speaker).encode("ascii", "ignore")
 		dist = distance(speaker, speaker_name)
 		full_name = full_speaker_names["Full Name"].iloc[j]
 		if full_name in distance_size:
