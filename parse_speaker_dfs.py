@@ -1,5 +1,5 @@
-# Combines data extracted from finding nearest name via Levenshtein distance
-# and other relevant information from the AN database
+""" Combines data extracted from finding nearest name via Levenshtein distance
+and other relevant information from the AN database """
 
 from bs4 import BeautifulSoup
 import unicodedata

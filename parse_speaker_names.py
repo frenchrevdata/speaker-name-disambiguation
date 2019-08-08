@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding=utf-8 -*-
+
+"""
+Helper file for name disambiguation
+"""
+
 from bs4 import BeautifulSoup
 import unicodedata
 import os
@@ -33,7 +40,8 @@ def read_names(name_file):
 	pd_list["Full Name"] = full_names
 	speakers_to_remove = []
 	speakers_to_keep = []
-	# Need to look if dates are within the timeframe of the Girondins/Montgnards
+
+	# Need to look if dates of speaker are within the timeframe of the Girondins/Montgnards
 	for j, speaker in enumerate(pd_list.index.values):
 		valid_date = False
 		depute_de = pd_list["Depute de"].iloc[j]
@@ -67,10 +75,7 @@ def read_names(name_file):
 			if (depute_de3 <= 1792.0 and depute_a3 >= 1792.0) or (depute_de3 <= 1793.0 and depute_a3 >= 1793.0):
 				valid_date = True
 
-		if speaker.find("lamet") != -1:
-			print speaker
-			print pd_list["Full Name"].iloc[j]
-			print j, valid_date
+
 		if valid_date == False:
 			speakers_to_remove.append(j)
 		if valid_date == True:
@@ -82,15 +87,6 @@ def read_names(name_file):
 	with open(pickle_filename, 'wb') as handle:
 		pickle.dump(pd_list, handle, protocol = 0)
 	return pd_list
-
-# Splits the speaker names
-def speaker_name_split(full_speaker_names):
-	speakers_split = []
-	for speaker_name in full_speaker_names.index:
-		words = re.findall("\w+", speaker_name)
-		split = Counter(izip(words, islice(words, 1, None)))
-		speakers_split.append(split)
-	return speakers_split
 
 
 # Finds the distance of the speaker name extracted from the XML to the last name
@@ -126,7 +122,5 @@ def compute_speaker_Levenshtein_distance(speaker_name, full_speaker_names):
 
 if __name__ == '__main__':
 	import sys
-	full_speaker_names = read_names("APnames.xlsx")
-	# speakers_split = speaker_name_split(full_speaker_names)
-	# compute_speaker_Levenshtein_distance(full_speaker_names)
+
 

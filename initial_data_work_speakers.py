@@ -21,7 +21,7 @@ import os
 import gzip
 from make_ngrams import compute_ngrams
 import xlsxwriter
-from processing_functions import remove_diacritic, load_speakerlist
+from processing_functions import remove_diacritic, load_speakerlist, write_to_excel
 from make_ngrams import make_ngrams
 from parse_speaker_names import compute_speaker_Levenshtein_distance, read_names
 
@@ -36,27 +36,17 @@ speechid_to_speaker = {}
 speakers_seen = set()
 speaker_dists = []
 speaker_dists_split = []
-footnotes = []
 names_not_caught = set()
-speeches_per_day = {}
-speakers_using_find = set()
-speakers = set()
-speaker_num_total_speeches = {}
-speaker_num_total_chars = {}
-speakers_per_session = {}
-global speaker_list
 
 def parseFiles(raw_speeches, multiple_speakers):
 	# Assumes all xml files are stored in a Docs folder in the same directory as the python file
     files = os.listdir("AP_ARTFL_vols/")
     dates = set()
-    num_sessions = 0
-    num_morethan1_session = 0
     for filename in files:
         if filename.endswith(".xml"):
         	print(filename)
         	filename = open('AP_ARTFL_vols/' + filename, "r")
-        	# Extracts volume number to keep track of for names_not_caught and speakers_using_find
+        	# Extracts volume number
         	volno = re.findall(vol_regex, str(filename))[0]
         	contents = filename.read()
         	soup = BeautifulSoup(contents, 'lxml')
@@ -73,9 +63,7 @@ def parseFiles(raw_speeches, multiple_speakers):
 		        if (date >= "1789-05-05") and (date <= "1795-01-04") and (date != "error"):
 		        	# Datas is a dataset keeping track of dates already looked at
 		        	# Accounts for multiple sessions per day
-		        	num_sessions += 1
 		        	if date in dates:
-		        		num_morethan1_session += 1
 		        		date = date + "_soir"
 		        		if date in dates:
 		        			date = date + "2"
@@ -87,17 +75,13 @@ def parseFiles(raw_speeches, multiple_speakers):
 		        		findSpeeches(raw_speeches, multiple_speakers, session, date, volno)
 		        		dates.add(date)
 	        filename.close()
-	pickle_filename = "num_sessions.pickle"
-    with open("num_sessions.pickle", 'wb') as handle:
-    	pickle.dump(num_sessions, handle, protocol = 0)
-    pickle_filename = "num_morethan1_session.pickle"
-    with open("num_morethan1_session.pickle", 'wb') as handle:
-    	pickle.dump(num_morethan1_session, handle, protocol = 0)
+
 
 def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 	id_base = date.replace("/","_")
 	number_of_speeches = 0
 	presidents = [">le President", "Le President", "Mle President", "President", "le' President", "Le Preesident", "Le Preseident", "Le Presidant", "Le Presideait", "le Presiden", "le President", "Le president", "le president", "Le President,", "Le Presideut", "Le Presidtent", "le Presient", "le Presldent", "le'President"]
+	full_speaker_names = pickle.load(open("dated_names.pickle", "rb"))
 	for talk in daily_soup.find_all('sp'):
 		# Tries to extract the speaker name and edits it for easier pairing with the Excel file
 		try:
@@ -133,12 +117,13 @@ def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 			# Find information in parathenses, generally has the department name
 			if parano == 0:
 				para = section.get_text()
-				if para[0] == "(" or para[1] == "(":
-					speaker_notes = re.findall(r'\([\s\S]{0,300}\)', para)
-					if speaker_notes:
-						speaker_note = speaker_notes[0]
-					else:
-						speaker_note = ""
+				if len(para) > 1:
+					if para[0] == "(" or para[1] == "(":
+						speaker_notes = re.findall(r'\([\s\S]{0,300}\)', para)
+						if speaker_notes:
+							speaker_note = speaker_notes[0]
+						else:
+							speaker_note = ""
 			text = text + " " + section.get_text()
 			parano += 1
 		full_speech = remove_diacritic(text).decode('utf-8')
@@ -147,9 +132,9 @@ def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 		full_speech = re.sub(r'([ ]{2,})', ' ', full_speech)
 		full_speech = re.sub(r'([0-9]{1,4})', ' ', full_speech)
 
-
-		# full_speaker_names = read_names("APnames.xlsx")
-		full_speaker_names = pickle.load(open("dated_names.pickle", "rb"))
+		# Conduct name_disambiguation
+		full_speaker_names = read_names("APnames.xlsx")
+		# full_speaker_names = pickle.load(open("dated_names.pickle", "rb"))
 		if (speaker.find(",") != -1) and (speaker.find(" et ") != -1):
 			#only store multiple speakers when length of speech greater than 100
 			speaker_name = "multi"
@@ -160,6 +145,7 @@ def findSpeeches(raw_speeches, multiple_speakers, daily_soup, date, volno):
 			if len(full_speech) >= 100:
 				multiple_speakers[speaker] = [full_speech, str(volno), str(date)]
 		else:
+			# Check to make sure have not already tried to disambiguate that speaker
 			if speaker not in speakers_seen:
 				matches = compute_speaker_Levenshtein_distance(speaker, full_speaker_names)
 				speaker_dists.append([speaker, matches, volno, date, speaker_note])
@@ -182,98 +168,19 @@ def extractDate(soup_file):
 
 if __name__ == '__main__':
 	import sys
-	speaker_list = load_speakerlist('Copy of AP_Speaker_Authority_List_Edited_3.xlsx')
 
 	raw_speeches = {}
 	multiple_speakers = {}
 	parseFiles(raw_speeches, multiple_speakers)
 
+	# Stores data in files to then be merged with AN dataset
 	speaker_distances = pd.DataFrame(speaker_dists, columns = ["Speaker Name", "Levenshtein Dists", "Volno", "Date", "Departments/Notes"])
-
-	write_to = pd.ExcelWriter("speaker_distances.xlsx")
-	speaker_distances.to_excel(write_to, 'Sheet1')
-	write_to.save()
+	write_to_excel(speaker_distances, "speaker_distances.xlsx")
 
 	speaker_distances_split = pd.DataFrame(speaker_dists_split, columns = ["Speaker Name", "Full Name", "Distance", "Volno", "Date", "Department/Notes"])
+	write_to_excel(speaker_distances_split, "speaker_distances_split.xlsx")
 
-	write_to = pd.ExcelWriter("speaker_distances_split.xlsx")
-	speaker_distances_split.to_excel(write_to, 'Sheet1')
-	write_to.save()
-
-	# w = csv.writer(open("speaker_dists.csv", "w"))
-	# for key, val in speaker_dists.items():
-	# 	w.writerow([key,val])
-
-	# # Writes data to relevant files
-	# txtfile = open("names_not_caught.txt", 'w')
-	# for name in sorted(names_not_caught):
-	# 	txtfile.write(name)
-	# txtfile.close()
-
-	# file = open('speakers_using_find.txt', 'w')
-	# for item in sorted(speakers_using_find):
-	# 	file.write(item)
-	# file.close()
-
-	# file = open('speakers.txt', 'w')
-	# for item in sorted(speakers):
-	# 	file.write(item + "\n")
-	# file.close()
-
-	# pickle_filename = "speechid_to_speaker.pickle"
-	# with open(pickle_filename, 'wb') as handle:
-	# 	pickle.dump(speechid_to_speaker, handle, protocol = 0)
-	# w = csv.writer(open("rspeechid_to_speaker.csv", "w"))
-	# for key, val in speechid_to_speaker.items():
-	# 	w.writerow([key,val])
-
-	# pickle_filename_2 = "raw_speeches.pickle"
-	# with open(pickle_filename_2, 'wb') as handle:
-	# 	pickle.dump(raw_speeches, handle, protocol = 0)
-	# w = csv.writer(open("raw_speeches.csv", "w"))
-	# for key, val in raw_speeches.items():
-	# 	w.writerow([key,val])
-
-	# pickle_filename_3 = "multiple_speakers.pickle"
-	# with open(pickle_filename_3, 'wb') as handle:
-	# 	pickle.dump(multiple_speakers, handle, protocol = 0)
-
-	# pickle_filename_2 = "speaker_num_total_speeches.pickle"
-	# with open(pickle_filename_2, 'wb') as handle:
-	# 	pickle.dump(speaker_num_total_speeches, handle, protocol = 0)
-
-	# pickle_filename_2 = "speaker_num_total_chars.pickle"
-	# with open(pickle_filename_2, 'wb') as handle:
-	# 	pickle.dump(speaker_num_total_chars, handle, protocol = 0)
-
-	# pickle_filename_2 = "speakers.pickle"
-	# with open(pickle_filename_2, 'wb') as handle:
-	# 	pickle.dump(speakers, handle, protocol = 0)
-
-	# pickle_filename_2 = "speeches_per_session.pickle"
-	# with open(pickle_filename_2, 'wb') as handle:
-	# 	pickle.dump(speeches_per_day, handle, protocol = 0)
-
-	# pickle_filename = "speakers_per_session.pickle"
-	# with open(pickle_filename, 'wb') as handle:
-	# 	pickle.dump(speakers_per_session, handle, protocol = 0)
-
-	# w = csv.writer(open("speaker_num_total_speeches.csv", "w"))
-	# for key, val in speaker_num_total_speeches.items():
-	# 	w.writerow([key, val])
-
-	# w = csv.writer(open("speaker_num_total_chars.csv", "w"))
-	# for key, val in speaker_num_total_chars.items():
-	# 	w.writerow([key, val])
-
-	# w = csv.writer(open("speeches_per_session.csv", "w"))
-	# for key, val in speeches_per_day.items():
-	# 	w.writerow([key, val])
-
-	# w = csv.writer(open("multiple_speakers.csv", "w"))
-	# for key, val in multiple_speakers.items():
-	# 	w.writerow([key, val])
-
+	
     
        
    	
